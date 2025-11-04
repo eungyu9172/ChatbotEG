@@ -5,13 +5,13 @@ from config import PROCESSING_STAGES
 from prompts import SYSTEM_PROMPTS
 from utils.llm_clients import gpt_4o_with_tools
 from utils.token_counter import count_tokens
-from utils.logger import logger
+from utils.logger import logger, format_messages_for_log
 
 
 def direct_answer(state: ChatState) -> ChatState:
     """단순 쿼리에 대한 응답 생성"""
     messages = state.get("messages", [])
-    logger.info(f"[Direct Answer] messages: {messages}")
+    logger.info(f"[Direct Answer] messages: {format_messages_for_log(messages)}")
     for msg in reversed(messages):
         if isinstance(msg, HumanMessage):
             user_message = msg
@@ -40,17 +40,17 @@ def direct_answer(state: ChatState) -> ChatState:
             tool_name = tool_call.get('name', 'unknown')
             tool_args = tool_call.get('args', {})
             logger.debug(f"[Direct Answer] 도구 {i+1}: {tool_name}({tool_args})")
-        logger.info(f"[Direct Answer] Response: {response}")
+        logger.info(f"[Direct Answer] Response: {format_messages_for_log([response])}")
         return {
             "messages": [response],
             "tool_call_count": state.get("tool_call_count", 0) + 1,
-            "processing_stage": PROCESSING_STAGES["TOOLS_NEEDED"]
+            "processing_stage": PROCESSING_STAGES["TOOL_ASSISTED_DIRECT_ANSWER"]
         }
     else:
         response_tokens = count_tokens(response.content) if response.content else 0
         logger.info("✅ [Direct Answer] 직접 답변 생성됨 (도구 호출 없음)")
         logger.debug(f"[Direct Answer] 답변 길이: {len(response.content)}자 ({response_tokens} 토큰)")
-        logger.info(f"[Direct Answer] Response: {response}")
+        logger.info(f"[Direct Answer] Response: {format_messages_for_log([response])}")
         return {
             "final_answer": response.content or "",
             "messages": [response],

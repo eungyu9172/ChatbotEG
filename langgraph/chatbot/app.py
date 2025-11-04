@@ -6,28 +6,32 @@ import time
 from datetime import datetime
 from dotenv import load_dotenv
 from typing import Dict, List, Any
+import asyncio
 
 from langgraph.graph import StateGraph, END
 
 from config import LOGGING_CONFIG
 from states import ChatState
 from nodes.validate_input import validate_input
+from nodes.rewrite_query import rewrite_query
 from nodes.check_simple import check_simple_query
 from nodes.direct_answer import direct_answer
-from nodes.rewrite_query import rewrite_query
-from nodes.retrieve import retrieve
-from nodes.rerank import rerank
-from nodes.check_answerable import check_answerability
 from nodes.generate import generate_answer
-from nodes.ask_info import ask_for_more_info
+# from nodes.retrieve import retrieve
+# from nodes.rerank import rerank
+from nodes.tool_call import tool_call
+# from nodes.check_answerable import check_answerability
+# from nodes.ask_info import ask_for_more_info
 from nodes.force_final_answer import force_final_answer
 from routers import (
-    input_valid_router, check_simple_router, check_answerable_router,
-    should_continue, tools_router
+    input_valid_router,
+    check_simple_router,
+    # check_answerable_router,
+    should_continue,
+    tools_router
 )
-from utils.llm_clients import tool_node
 from utils.logger import logger, session_logger
-from tools import AVAILABLE_TOOLS
+from utils.llm_clients import AVAILABLE_TOOLS
 
 
 class ChatbotApplication:
@@ -89,15 +93,15 @@ class ChatbotApplication:
         """모든 노드를 워크플로우에 추가"""
         nodes = {
             "validate_input": validate_input,
+            "rewrite": rewrite_query,
             "check_simple": check_simple_query,
             "direct_answer": direct_answer,
-            "tools": tool_node,
-            "rewrite": rewrite_query,
-            "retrieve": retrieve,
-            "rerank": rerank,
-            "check_answerable": check_answerability,
             "generate": generate_answer,
-            "ask_info": ask_for_more_info,
+            "tools": tool_call,
+            # "retrieve": retrieve,
+            # "rerank": rerank,
+            # "check_answerable": check_answerability,
+            # "ask_info": ask_for_more_info,
             "force_final_answer": force_final_answer
         }
 
@@ -110,22 +114,23 @@ class ChatbotApplication:
         # 엔트리 포인트 설정
         workflow.set_entry_point("validate_input")
 
-        # 조건부 엣지 설정
         workflow.add_conditional_edges(
             "validate_input",
             input_valid_router,
             {
-                "check_simple": "check_simple",
+                "rewrite": "rewrite",
                 "error": END
             }
         )
+
+        workflow.add_edge("rewrite", "check_simple")
 
         workflow.add_conditional_edges(
             "check_simple",
             check_simple_router,
             {
                 "direct_answer": "direct_answer",
-                "rewrite": "rewrite"
+                "generate": "generate"
             }
         )
 
@@ -135,14 +140,14 @@ class ChatbotApplication:
             ["tools", "force_final_answer", END]
         )
 
-        workflow.add_conditional_edges(
-            "check_answerable",
-            check_answerable_router,
-            {
-                "generate": "generate",
-                "ask_info": "ask_info"
-            }
-        )
+        # workflow.add_conditional_edges(
+        #     "check_answerable",
+        #     check_answerable_router,
+        #     {
+        #         "ask_info": "ask_info",
+        #         "answerable": END
+        #     }
+        # )
 
         workflow.add_conditional_edges(
             "generate",
@@ -159,16 +164,15 @@ class ChatbotApplication:
             }
         )
 
-        # 단순 엣지 설정
-        workflow.add_edge("rewrite", "retrieve")
-        workflow.add_edge("retrieve", "rerank")
-        workflow.add_edge("rerank", "check_answerable")
-        workflow.add_edge("ask_info", END)
+        # workflow.add_edge("rewrite", "retrieve")
+        # workflow.add_edge("retrieve", "rerank")
+        # workflow.add_edge("rerank", "check_answerable")
+        # workflow.add_edge("ask_info", END)
         workflow.add_edge("force_final_answer", END)
 
         logger.debug("라우팅 설정 완료")
 
-    def process_query(
+    async def process_query(
         self,
         user_query: str,
         session_id: str = None
@@ -200,8 +204,8 @@ class ChatbotApplication:
             "error": None,
             "is_simple_query": None,
             "rewritten_query": None,
-            "retrieve_results": None,
-            "reranked_context": None,
+            "retrieve_results": [],
+            "reranked_context": [],
             "is_answerable": None,
             "final_answer": None,
             "confidence_score": None
@@ -211,7 +215,7 @@ class ChatbotApplication:
 
         try:
             # 워크플로우 실행
-            final_state = self.app.invoke(initial_state)
+            final_state = await self.app.ainvoke(initial_state)
 
             execution_time = time.time() - start_time
 
@@ -359,7 +363,7 @@ class ChatbotApplication:
 
                 # 쿼리 처리
                 print("🤔 처리 중...")
-                result = self.process_query(user_input, session_id)
+                result = asyncio.run(self.process_query(user_input, session_id))
 
                 # 결과 출력
                 print(f"\n🤖 AI: {result['final_answer']}")
@@ -423,6 +427,7 @@ class ChatbotApplication:
   • 현재 시간 조회
   • 주식 가격 조회
   • 날씨 정보 조회
+  • RAG (retrieve, rerank)
 
 예시 질문:
   • "지금 몇 시야?"
@@ -449,7 +454,7 @@ class ChatbotApplication:
 
             for iteration in range(iterations):
                 session_id = f"benchmark_{i}_{iteration}"
-                result = self.process_query(query, session_id)
+                result = asyncio.run(self.process_query(query, session_id))
 
                 query_results.append({
                     "iteration": iteration + 1,
@@ -553,7 +558,7 @@ def main():
         elif args.mode == "test":
             # 단일 쿼리 테스트
             query = args.query or "안녕하세요!"
-            result = app.process_query(query)
+            result = asyncio.run(app.process_query(query))
 
             print(f"\n질문: {query}")
             print(f"답변: {result['final_answer']}")

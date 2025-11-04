@@ -311,8 +311,8 @@ class SemanticChunker:
         logger.info(f"청킹 완료: {len(all_sentences)}개 문장 → {len(chunks)}개 청크")
 
         # 품질 검증
-        for i, chunk in enumerate(chunks):
-            tokens = self.count_tokens(chunk.text)
+        for i, chunk_obj in enumerate(chunks):
+            tokens = self.count_tokens(chunk_obj.text)
             if tokens < self.config.min_tokens:
                 logger.warning(f"청크 {i} 토큰 수 부족: {tokens} < {self.config.min_tokens}")
             if tokens > self.config.max_tokens:
@@ -335,7 +335,7 @@ def get_semantic_chunker(config: ChunkConfig = None) -> SemanticChunker:
 
 def chunk_text(
     text: str
-) -> List[str]:
+) -> List[ChunkWithPage]:
     """
     통합 청킹 인터페이스
 

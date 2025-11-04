@@ -19,6 +19,7 @@ class ChatState(TypedDict):
     # 검색 관련
     retrieve_results: Optional[List[Dict[str, Any]]]
     reranked_context: Optional[List[str]]
+    is_reranked: Optional[bool]
     is_answerable: Optional[bool]
     retrieval_time: Optional[float]
 

@@ -10,15 +10,9 @@ from utils.logger import logger
 def check_simple_query(state: ChatState) -> ChatState:
     """단순 쿼리 검사"""
     messages = state.get("messages", [])
-    if not messages:
-        return {
-            "error": "메시지가 없습니다",
-            "processing_stage": PROCESSING_STAGES["VALIDATION_FAILED"]
-        }
-
     user_message = messages[-1]
 
-    logger.info(f"[Check Simple] user_message: {user_message}")
+    logger.info(f"[Check Simple] user_message(rewritten): {user_message.content}")
     system_prompt = SystemMessage(content=SYSTEM_PROMPTS["check_simple"])
     prompt = [system_prompt, user_message]
 

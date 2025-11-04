@@ -1,15 +1,20 @@
-# LangGraph 챗봇 시스템
+# LangGraph 챗봇 (MCP 기반)
 
-LangGraph를 활용한 지능형 챗봇 시스템과 RAG 문서 처리 시스템입니다. 도구(Tools)를 활용한 실시간 정보 조회와 RAG(Retrieval-Augmented Generation) 기능을 지원합니다.
+LangGraph를 활용한 지능형 챗봇 시스템입니다. **MCP (Model Context Protocol)** 기반으로 도구(Tools)와 RAG(Retrieval-Augmented Generation) 기능을 제공합니다.
 
 ## 🚀 주요 기능
 
 ### 챗봇 시스템 (chatbot/)
 - **지능형 라우팅**: 단순 질문과 복잡한 질문을 자동으로 구분하여 처리
-- **도구 시스템**: 시간 조회, 주식 가격, 날씨 정보 등 (추가 기능 개발 예정)
+- **MCP 기반 도구 시스템**: 모든 도구를 MCP 서버로 구현하여 모듈화 및 확장성 확보
 - **세션 관리**: 대화 히스토리 유지 및 세션별 로그 관리
 - **안전장치**: Tool 호출 횟수 제한으로 무한 루프 방지
-- **RAG 통합**: 벡터 검색 기반 문서 검색 시스템
+- **RAG 통합**: MCP 기반 벡터 검색 및 재순위화 시스템 (retrieve → rerank 연속 동작)
+
+### MCP 서버 시스템 (mcp_servers/)
+- **자동 서버 탐색**: `mcp_servers/` 폴더를 스캔하여 서버 자동 로드
+- **모듈화된 도구**: 각 도구를 독립적인 MCP 서버로 구현
+- **RAG MCP 서버**: retrieve와 rerank를 별도 서버로 분리하여 연속 동작 지원
 
 ### RAG 문서 처리 시스템 (rag_ingest/)
 - **다양한 문서 형식 지원**: PDF, TXT 등 다양한 형식의 문서 처리
@@ -19,7 +24,7 @@ LangGraph를 활용한 지능형 챗봇 시스템과 RAG 문서 처리 시스템
 
 ## 📋 요구사항
 
-- Python 3.8+
+- Python 3.10+
 - OpenAI API Key (챗봇 시스템용)
 - ChromaDB (RAG 시스템용)
 - 필요한 패키지들 (각 폴더의 requirements.txt 참조)
@@ -161,11 +166,24 @@ LangGraph를 활용한 지능형 챗봇 시스템과 RAG 문서 처리 시스템
 📝 세션 로그 저장 완료: logs/chatbot_session_20241201_143025.txt
 ```
 
-## 🛠️ 사용 가능한 도구
+## 🛠️ 사용 가능한 MCP 도구
 
-- **시간 조회**: 현재 시간 및 날짜 정보
-- **주식 가격**: 실시간 주식 가격 조회 (yfinance 사용)
-- **날씨 정보**: 특정 지역의 날씨 정보 (Mock 데이터)
+모든 도구는 MCP 서버로 구현되어 있으며, `mcp_servers/` 폴더에서 자동으로 탐색되어 로드됩니다.
+
+### 기본 도구
+- **시간 조회** (`time_server`): 현재 시간 및 날짜 정보 조회
+- **주식 가격** (`finance_server`): 실시간 주식 가격 조회 (yfinance 사용)
+- **날씨 정보** (`weather_server`): 특정 지역의 날씨 정보 조회 (Open-Meteo API 사용)
+
+### RAG 도구
+- **문서 검색** (`retrieve_rag_server`): ChromaDB에서 관련 문서 검색 (벡터 검색)
+- **문서 재순위화** (`rerank_server`): 검색된 문서를 쿼리와의 관련성에 따라 재정렬
+
+### MCP 서버 추가 방법
+1. `langgraph/mcp_servers/` 폴더에 새 서버 폴더 생성
+2. `server.py` 파일에 FastMCP 기반 서버 구현
+3. 챗봇 실행 시 자동으로 탐색되어 로드됨
+4. 서버 비활성화: 서버 폴더에 `.disabled` 파일 생성
 
 ## 🛠️ RAG에 등록된 문서(8개)
 
@@ -194,18 +212,30 @@ langgraph/
 │   │   ├── check_simple.py
 │   │   ├── direct_answer.py
 │   │   ├── generate.py
-│   │   └── ...
-│   ├── tools/           # 도구들
-│   │   ├── time_tools.py
-│   │   ├── finance_tools.py
-│   │   └── weather_tools.py
+│   │   ├── tool_call.py      # MCP 도구 호출 노드
+│   │   ├── rewrite_query.py
+│   │   └── force_final_answer.py
+│   ├── mcp_client/      # MCP 클라이언트
+│   │   ├── __init__.py
+│   │   └── client_manager.py  # MCP 서버 자동 탐색 및 관리
 │   ├── utils/           # 유틸리티
 │   │   ├── logger.py
-│   │   ├── llm_clients.py
+│   │   ├── llm_clients.py    # MCP 도구 바인딩
 │   │   └── ...
 │   └── logs/            # 세션별 로그 파일
 │       ├── chatbot_session_20241201_143025.txt
 │       └── ...
+├── mcp_servers/         # MCP 서버들
+│   ├── time_server/     # 시간 조회 서버
+│   │   └── server.py
+│   ├── finance_server/  # 주식 가격 서버
+│   │   └── server.py
+│   ├── weather_server/  # 날씨 정보 서버
+│   │   └── server.py
+│   ├── retrieve_rag_server/  # 문서 검색 서버
+│   │   └── server.py
+│   └── rerank_server/   # 문서 재순위화 서버
+│       └── server.py
 └── rag_ingest/          # RAG 문서 처리 시스템
     ├── run.py           # 메인 실행 파일
     ├── pipeline.py      # 문서 처리 파이프라인
@@ -222,10 +252,26 @@ langgraph/
 
 ### 챗봇 시스템 워크플로우
 ```
-입력 검증 → 단순 질문 판별 → [직접 답변 | 검색 → 재순위 → 답변 생성]
-                ↓
-            도구 호출 → 결과 반영 → 최종 답변
+입력 검증 → 쿼리 재작성 → 단순 질문 판별
+    ↓
+[단순 질문 경로]              [복잡한 질문 경로]
+직접 답변 노드              → 답변 생성 노드
+    ↓                            ↓
+도구 호출 필요?            → 도구 호출 필요?
+    ↓                            ↓
+[MCP 도구 호출]              [MCP 도구 호출]
+  - 시간 조회                  - retrieve_documents
+  - 주식 가격                  - rerank_documents (연속 호출)
+  - 날씨 정보                  - 기타 도구
+    ↓                            ↓
+결과 반영 → 최종 답변    → 결과 반영 → 최종 답변
 ```
+
+### RAG 연속 동작 (retrieve → rerank)
+LLM이 자동으로 다음 순서로 도구를 호출하도록 설계되었습니다:
+1. **retrieve_documents**: ChromaDB에서 관련 문서 검색 (최대 10개)
+2. **rerank_documents**: 검색된 문서를 쿼리와의 관련성에 따라 재정렬 (상위 5개 선택)
+3. **답변 생성**: 재정렬된 문서를 컨텍스트로 활용하여 최종 답변 생성
 
 ### RAG 문서 처리 워크플로우
 ```
@@ -240,19 +286,30 @@ langgraph/
 
 ## ⚠️ 주의사항
 
-- OpenAI API Key가 필요합니다 (챗봇 시스템용)
-- ChromaDB가 필요합니다 (RAG 시스템용)
-- 주식 데이터는 yfinance를 통해 실시간 조회됩니다
-- 날씨 정보는 현재 Mock 데이터를 사용합니다
-- Tool 호출은 최대 3회로 제한됩니다
+- **OpenAI API Key**가 필요합니다 (챗봇 시스템용)
+- **ChromaDB**가 필요합니다 (RAG 시스템용)
+- **주식 데이터**: yfinance를 통해 실시간 조회됩니다
+- **날씨 정보**: Open-Meteo API를 사용하여 실시간 날씨 정보를 조회합니다
+- **Tool 호출**: 최대 3회로 제한됩니다 (무한 루프 방지)
+- **MCP 서버**: 모든 도구는 MCP 서버로 구현되어 있으며, stdio 전송 방식을 사용합니다
+- **RAG 연속 동작**: retrieve 후 rerank가 자동으로 연속 호출되도록 LLM 프롬프트에서 안내합니다
 
 ## 🚧 개발 예정
 
 ### 챗봇 시스템
 - [v] RAG 시스템 구현 (벡터 검색)
-- [ ] 더 많은 도구 추가
+- [v] MCP 기반 도구 시스템 전환
+- [v] RAG retrieve → rerank 연속 동작 구현
+- [ ] 더 많은 MCP 서버 추가
 - [ ] 웹 인터페이스
 - [ ] 성능 최적화
+
+### MCP 서버 시스템
+- [v] 자동 서버 탐색 기능
+- [v] 기본 도구 서버 구현 (시간, 주식, 날씨)
+- [v] RAG 서버 구현 (retrieve, rerank)
+- [ ] 서버 상태 모니터링
+- [ ] 동적 서버 추가/제거 기능
 
 ### RAG 문서 처리 시스템
 - [v] 기본 문서 처리 파이프라인

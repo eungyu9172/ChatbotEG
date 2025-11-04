@@ -11,11 +11,16 @@ from utils.logger import logger
 
 def rewrite_query(state: ChatState) -> ChatState:
     """쿼리 재작성 노드"""
-    user_query = state["user_query"]
-
+    user_query = state.get("user_query", [])
+    if not user_query:
+        return {
+            "error": "메시지가 없습니다",
+            "processing_stage": PROCESSING_STAGES["VALIDATION_FAILED"]
+        }
     logger.info(f"[Rewrite] 쿼리 재작성 시작: {user_query}")
 
     system_prompt = SystemMessage(content=SYSTEM_PROMPTS["rewrite_query"])
+    user_message = HumanMessage(content=user_query)
 
     pronouns = extract_pronouns_and_references(user_query)
     if pronouns:
@@ -26,7 +31,7 @@ def rewrite_query(state: ChatState) -> ChatState:
         logger.debug(f"[Rewrite] 히스토리 포함 처리 ({len(existing_messages)} 메시지)")
     else:
         # 대명사 없음 → 현재 쿼리만
-        prompt = [system_prompt, HumanMessage(content=user_query)]
+        prompt = [system_prompt, user_message]
         logger.info("[Rewrite] 📝 단순 쿼리 - 히스토리 제외 처리")
 
     # 토큰 수 로깅
@@ -38,7 +43,9 @@ def rewrite_query(state: ChatState) -> ChatState:
     logger.info(f"[Rewrite] 원본: {user_query}")
     logger.info(f"[Rewrite] 재작성: {rewritten}")
 
+    rewritten_user_message = HumanMessage(content=rewritten)
+
     return {
-        "rewritten_query": rewritten,
+        "messages": [rewritten_user_message],
         "processing_stage": PROCESSING_STAGES["REWRITTEN"]
     }

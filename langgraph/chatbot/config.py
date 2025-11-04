@@ -42,9 +42,11 @@ PROCESSING_STAGES = {
     "RETRIEVED": "retrieved",
     "RERANKED": "reranked",
     "CHECKED_ANSWERABILITY": "checked_answerability",
-    "ANSWERED_WITH_CONTEXT": "answered_with_context",
+    "ANSWERED": "answered",
     "ASKED_FOR_MORE_INFO": "asked_for_more_info",
-    "TOOLS_NEEDED": "tools_needed"
+    "TOOL_ASSISTED_GENERATE": "tool_asisted_generate",
+    "TOOL_ASSISTED_DIRECT_ANSWER": "tool_assisted_direct_answer",
+    "FORCE_ANSWERED": "force_answered"
 }
 
 # 로깅 설정
